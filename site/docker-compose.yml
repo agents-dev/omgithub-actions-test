@@ -1,0 +1,22 @@
+services:
+  omgithub:
+    build: .
+    image: omgithub:latest
+    container_name: omgithub
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: 8787
+      DATA_DIR: /app/data
+    ports:
+      - "127.0.0.1:8794:8787"
+    volumes:
+      - omgithub-data:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  omgithub-data:

@@ -54,6 +54,11 @@ standard `opencode run` path. A `/goal` trigger also automatically adds the
    verification,
    then marks the comment closed and terminates both tunnels.
 
+After PR creation, the workflow also ZIPs `project/dist`, publishes it through
+the token-protected OmGithub API, verifies the permanent wildcard URL, and puts
+the permanent game and install links in the final issue comment. See
+[OmGithub publishing](omgithub.md).
+
 The comment URL opens `/<encoded-worktree>/session/<session-id>` rather than
 the web home page. This matters because the web home page stores its project
 selection in the browser, while the runner's project exists only on the

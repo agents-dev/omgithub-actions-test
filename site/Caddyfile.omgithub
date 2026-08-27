@@ -1,0 +1,10 @@
+omgithub.com, www.omgithub.com {
+	encode gzip zstd
+	reverse_proxy 127.0.0.1:8794
+}
+
+*.omgithub.com {
+	encode gzip zstd
+	tls internal
+	reverse_proxy 127.0.0.1:8794
+}

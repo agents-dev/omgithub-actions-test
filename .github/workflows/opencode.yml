@@ -696,6 +696,57 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Publish game to OmGithub
+        id: omgithub_publish
+        shell: bash
+        working-directory: ${{ env.PROJECT_DIR }}
+        env:
+          OMGITHUB_PUBLISH_TOKEN: ${{ secrets.OMGHITHUB_PUBLISH_TOKEN }}
+          FINAL_COMMIT: ${{ steps.delivery.outputs.commit }}
+          PR_URL: ${{ steps.delivery.outputs.pr_url }}
+          SCREENSHOTS_JSON: ${{ steps.final_evidence.outputs.screenshots_json }}
+        run: |
+          set -euo pipefail
+          [[ -n "$OMGHITHUB_PUBLISH_TOKEN" ]]
+          [[ -f dist/index.html ]]
+          [[ -n "$FINAL_COMMIT" ]]
+          [[ "$PR_URL" =~ /pull/([0-9]+)$ ]]
+          PR_NUMBER="${BASH_REMATCH[1]}"
+
+          package_name="$(jq -r '.name // empty' package.json 2>/dev/null || true)"
+          request_title="${COMMENT_BODY%%$'\n'*}"
+          request_title="${request_title#/goal }"
+          game_name="${package_name:-$request_title}"
+          game_name="$(sed -E 's/[^[:alnum:]]+/-/g; s/^-+|-+$//g' <<<"$game_name" | tr '[:upper:]' '[:lower:]')"
+          [[ -n "$game_name" ]] || game_name="game-$TRIGGER_ISSUE_NUMBER"
+
+          screenshots="$(jq -c --arg owner "${GITHUB_REPOSITORY_OWNER}" --arg repo "${GITHUB_REPOSITORY#*/}" --arg commit "$FINAL_COMMIT" '
+            map("https://raw.githubusercontent.com/\($owner)/\($repo)/\($commit)/project/screenshots/\(.)")
+          ' <<<"${SCREENSHOTS_JSON:-[]}")"
+          archive="$RUNNER_TEMP/omgithub-dist.zip"
+          (cd dist && zip -q -r "$archive" .)
+          response="$RUNNER_TEMP/omgithub-publish.json"
+          curl --fail-with-body --silent --show-error \
+            -X POST "https://omgithub.com/api/publish" \
+            -H "Authorization: Bearer $OMGHITHUB_PUBLISH_TOKEN" \
+            -H 'Content-Type: application/zip' \
+            -H "X-OmGithub-Name: $game_name" \
+            -H "X-OmGithub-Title: ${request_title:0:150}" \
+            -H "X-OmGithub-Owner: $GITHUB_REPOSITORY_OWNER" \
+            -H "X-OmGithub-Repo: ${GITHUB_REPOSITORY#*/}" \
+            -H "X-OmGithub-Issue: $TRIGGER_ISSUE_NUMBER" \
+            -H "X-OmGithub-PR: $PR_NUMBER" \
+            -H "X-OmGithub-Commit: $FINAL_COMMIT" \
+            -H "X-OmGithub-Actor: $GITHUB_ACTOR" \
+            -H "X-OmGithub-Screenshots: $screenshots" \
+            --data-binary "@$archive" > "$response"
+          jq -e '.ok == true and .project.url and .project.install_url' "$response" >/dev/null
+          published_url="$(jq -r '.project.url' "$response")"
+          install_url="$(jq -r '.project.install_url' "$response")"
+          curl --fail --silent --show-error --retry 10 --retry-delay 2 "$published_url" >/dev/null
+          printf 'url=%s\ninstall_url=%s\n' "$published_url" "$install_url" >> "$GITHUB_OUTPUT"
+          echo "Published permanent game URL: $published_url"
+
       - name: Create OpenCode logs release
         if: success()
         id: opencode_release
@@ -751,6 +802,8 @@ jobs:
           SCREENSHOTS_STATUS: ${{ steps.final_evidence.outputs.screenshots_status }}
           OPENCODE_RELEASE_URL: ${{ steps.opencode_release.outputs.url }}
           OPENCODE_RELEASE_ASSETS: ${{ steps.opencode_release.outputs.assets_json }}
+          OMGITHUB_URL: ${{ steps.omgithub_publish.outputs.url }}
+          OMGITHUB_INSTALL_URL: ${{ steps.omgithub_publish.outputs.install_url }}
         with:
           script: |
             const number = context.payload.pull_request?.number ?? context.issue.number;
@@ -767,7 +820,9 @@ jobs:
               : 'Final screenshot evidence: missing after two automated follow-ups; the task completed, but screenshot capture still needs attention.';
             const body = [
               '✅ **Game complete and publicly verified.**', '',
-              `Public game: ${process.env.APP_URL}`,
+              `Public game: ${process.env.OMGHITHUB_URL}`,
+              `Install: ${process.env.OMGHITHUB_INSTALL_URL}`,
+              `Temporary verification preview: ${process.env.APP_URL}`,
               `Final commit: ${commitUrl}`,
               `Pull request: ${process.env.PR_URL}`,
               `OpenCode logs release: ${process.env.OPENCODE_RELEASE_URL}`,
