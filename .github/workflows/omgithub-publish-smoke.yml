@@ -28,14 +28,15 @@ jobs:
 
       - name: Publish fixture to OmGithub
         env:
-          OMGITHUB_PUBLISH_TOKEN: ${{ secrets.OMGHITHUB_PUBLISH_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           GAME_NAME: ${{ inputs.name }}
         run: |
           set -euo pipefail
-          test -n "$OMGHITHUB_PUBLISH_TOKEN"
+          test -n "$GITHUB_TOKEN"
           curl --fail-with-body --silent --show-error \
             -X POST https://omgithub.com/api/publish \
-            -H "Authorization: Bearer $OMGHITHUB_PUBLISH_TOKEN" \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "X-OmGithub-GitHub-Token: $GITHUB_TOKEN" \
             -H 'Content-Type: application/zip' \
             -H "X-OmGithub-Name: $GAME_NAME" \
             -H 'X-OmGithub-Title: OmGithub action smoke' \
@@ -47,4 +48,4 @@ jobs:
             -H "X-OmGithub-Commit: $GITHUB_SHA" \
             -H "X-OmGithub-Actor: $GITHUB_ACTOR" \
             --data-binary @game-dist.zip | tee publish.json
-          node -e "const fs=require('fs'); const r=JSON.parse(fs.readFileSync('publish.json')); if (!r.url || !r.install_url) process.exit(1); console.log('Published:', r.url); console.log('Install:', r.install_url)"
+          node -e "const fs=require('fs'); const r=JSON.parse(fs.readFileSync('publish.json')); if (!r.project?.url || !r.project?.install_url) process.exit(1); console.log('Published:', r.project.url); console.log('Install:', r.project.install_url)"
