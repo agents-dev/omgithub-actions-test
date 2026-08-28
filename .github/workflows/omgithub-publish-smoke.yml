@@ -24,7 +24,7 @@ jobs:
           mkdir -p dist
           printf '<!doctype html><title>%s</title><h1>OmGithub action smoke</h1>\n' "$GAME_NAME" > dist/index.html
           printf '{"name":"%s","start_url":"/"}\n' "$GAME_NAME" > dist/manifest.json
-          zip -qr game-dist.zip dist
+          (cd dist && zip -qr ../game-dist.zip .)
 
       - name: Publish fixture to OmGithub
         env:
