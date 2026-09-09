@@ -3,25 +3,24 @@ run-name: "OpenCode #${{ github.event.issue.number }} — ${{ github.event.issue
 
 on:
   issues:
-    types: [labeled]
+    types: [opened, labeled]
 
 permissions: {}
 
 concurrency:
-  group: ${{ github.event.label.name == 'OpenCode' && format('opencode-issue-{0}-{1}', github.repository, github.event.issue.number) || format('opencode-skipped-{0}', github.run_id) }}
+  group: ${{ (github.event.label.name == 'OpenCode' || (github.event.action == 'opened' && vars.OPENCODE_ACCESS == 'everyone' && contains(github.event.issue.title, '/OpenCode') && !contains(github.event.issue.labels.*.name, 'OpenCode'))) && format('opencode-issue-{0}-{1}', github.repository, github.event.issue.number) || format('opencode-skipped-{0}', github.run_id) }}
   cancel-in-progress: false
 
 jobs:
   prepare:
-    if: github.event.label.name == 'OpenCode'
+    if: github.event.label.name == 'OpenCode' || (github.event.action == 'opened' && vars.OPENCODE_ACCESS == 'everyone' && contains(github.event.issue.title, '/OpenCode') && !contains(github.event.issue.labels.*.name, 'OpenCode'))
     permissions:
       contents: read
       issues: write
       actions: read
-      id-token: write
-    uses: AgentsLoop/OhMyGithub/.github/workflows/opencode-prepare.yml@6184c4598055939fca52f81ee8b2ffa83dc129fa
+    uses: AgentsLoop/OhMyGithub/.github/workflows/opencode-prepare.yml@667a74efad2c2825836ae1e93d36ae5f4441203a
     with:
-      runtime_ref: 6184c4598055939fca52f81ee8b2ffa83dc129fa
+      runtime_ref: 667a74efad2c2825836ae1e93d36ae5f4441203a
 
   opencode:
     needs: prepare
@@ -30,9 +29,9 @@ jobs:
       contents: write
       issues: write
       actions: read
-    uses: AgentsLoop/OhMyGithub/.github/workflows/opencode-reusable.yml@6184c4598055939fca52f81ee8b2ffa83dc129fa
+    uses: AgentsLoop/OhMyGithub/.github/workflows/opencode-reusable.yml@667a74efad2c2825836ae1e93d36ae5f4441203a
     with:
-      runtime_ref: 6184c4598055939fca52f81ee8b2ffa83dc129fa
+      runtime_ref: 667a74efad2c2825836ae1e93d36ae5f4441203a
       issue_number: ${{ needs.prepare.outputs.issue_number }}
       request: ${{ needs.prepare.outputs.request }}
       issue_title: ${{ needs.prepare.outputs.issue_title }}
